@@ -1,5 +1,5 @@
 - 👋 Hi, I’m Gavin Nowlin
-- 👀 I’m interested in software development
+- 👀 I do the make software
 - 👨‍💻 Co-founder and Lead Software Dev for [The Vision Devs](https://thevisiondevs.com)
 - 📫 Reach out on Discord: @nevup
 
