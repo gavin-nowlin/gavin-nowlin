@@ -1,0 +1,103 @@
+---
+---
+
+<button
+	type="button"
+	class="theme-toggle"
+	aria-label="Toggle color theme"
+	data-theme-toggle
+>
+	<span class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+			<circle cx="12" cy="12" r="4"></circle>
+			<path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+		</svg>
+	</span>
+	<span class="theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true">
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"></path>
+		</svg>
+	</span>
+</button>
+
+<script>
+	function getPreferredTheme() {
+		const stored = localStorage.getItem('theme');
+		if (stored === 'light' || stored === 'dark') return stored;
+		return window.matchMedia('(prefers-color-scheme: dark)').matches
+			? 'dark'
+			: 'light';
+	}
+
+	function setTheme(theme: 'light' | 'dark') {
+		document.documentElement.setAttribute('data-theme', theme);
+		localStorage.setItem('theme', theme);
+	}
+
+	function toggleTheme() {
+		const current =
+			document.documentElement.getAttribute('data-theme') || getPreferredTheme();
+		setTheme(current === 'dark' ? 'light' : 'dark');
+	}
+
+	document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+		button.addEventListener('click', toggleTheme);
+	});
+</script>
+
+<style>
+	.theme-toggle {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		border-radius: var(--radius-sm);
+		color: var(--color-text-muted);
+		transition:
+			color var(--duration) var(--ease-out),
+			background-color var(--duration) var(--ease-out);
+	}
+
+	.theme-toggle:hover {
+		color: var(--color-text);
+		background-color: var(--color-accent-soft);
+	}
+
+	.theme-toggle__icon {
+		position: absolute;
+		display: grid;
+		place-items: center;
+		transition:
+			opacity var(--duration) var(--ease-out),
+			transform var(--duration) var(--ease-out);
+	}
+
+	.theme-toggle__icon--moon {
+		opacity: 0;
+		transform: rotate(-20deg) scale(0.85);
+	}
+
+	:global(html[data-theme='dark']) .theme-toggle__icon--sun {
+		opacity: 0;
+		transform: rotate(20deg) scale(0.85);
+	}
+
+	:global(html[data-theme='dark']) .theme-toggle__icon--moon {
+		opacity: 1;
+		transform: none;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:global(html:not([data-theme])) .theme-toggle__icon--sun {
+			opacity: 0;
+			transform: rotate(20deg) scale(0.85);
+		}
+
+		:global(html:not([data-theme])) .theme-toggle__icon--moon {
+			opacity: 1;
+			transform: none;
+		}
+	}
+</style>

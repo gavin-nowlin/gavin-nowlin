@@ -1,0 +1,53 @@
+---
+import { projects } from '../data/projects';
+import ProjectCard from './ProjectCard.astro';
+---
+
+<section id="projects" class="section projects" aria-labelledby="projects-title">
+	<div class="container frame">
+		<span class="frame__mark frame__mark--tl" aria-hidden="true"></span>
+		<span class="frame__mark frame__mark--br" aria-hidden="true"></span>
+		<div class="reveal">
+			<span class="section-label">Projects</span>
+			<h2 id="projects-title" class="section-title">Things I've built</h2>
+		</div>
+		<ul class="projects__grid">
+			{
+				projects.map((project) => (
+					<li class="reveal">
+						<ProjectCard project={project} />
+					</li>
+				))
+			}
+		</ul>
+	</div>
+</section>
+
+<style>
+	.projects__grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-4);
+		align-items: stretch;
+	}
+
+	.projects__grid > li {
+		display: flex;
+		height: 100%;
+	}
+
+	.projects__grid > li > :global(.project-card) {
+		flex: 1;
+		width: 100%;
+		height: 100%;
+	}
+
+	@media (min-width: 640px) {
+		.projects__grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: var(--space-5);
+		}
+	}
+</style>

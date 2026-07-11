@@ -1,0 +1,83 @@
+---
+import { site } from '../data/site';
+import ThemeToggle from './ThemeToggle.astro';
+---
+
+<header class="header">
+	<div class="container header__inner">
+		<a class="header__brand" href="/">{site.name}</a>
+		<nav class="header__nav" aria-label="Primary">
+			<a href="#about">About</a>
+			<a href="#projects">Projects</a>
+			<a href="#contact">Contact</a>
+			<ThemeToggle />
+		</nav>
+	</div>
+</header>
+
+<style>
+	.header {
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		backdrop-filter: blur(12px);
+		background-color: var(--color-bg-header);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.header__inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		min-height: var(--header-height);
+	}
+
+	.header__brand {
+		font-size: var(--text-base);
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		color: var(--color-text);
+		text-decoration: none;
+	}
+
+	.header__brand:hover {
+		color: var(--color-accent);
+	}
+
+	.header__nav {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.header__nav a {
+		display: none;
+		padding: var(--space-2) var(--space-3);
+		min-height: 2.75rem;
+		align-items: center;
+		font-size: var(--text-sm);
+		font-weight: 500;
+		color: var(--color-text-muted);
+		text-decoration: none;
+		border-radius: var(--radius-sm);
+		transition:
+			color var(--duration) var(--ease-out),
+			background-color var(--duration) var(--ease-out);
+	}
+
+	.header__nav a:hover {
+		color: var(--color-text);
+		background-color: var(--color-accent-soft);
+	}
+
+	@media (min-width: 640px) {
+		.header__nav {
+			gap: var(--space-2);
+		}
+
+		.header__nav a {
+			display: inline-flex;
+		}
+	}
+</style>

@@ -1,0 +1,407 @@
+---
+import '../styles/global.css';
+import { site } from '../data/site';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const { title = site.title, description = site.description } = Astro.props;
+const canonical = new URL(Astro.url.pathname, site.url).href;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:site_name" content={site.name} />
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<script is:inline>
+			(function () {
+				try {
+					var stored = localStorage.getItem('theme');
+					if (stored === 'light' || stored === 'dark') {
+						document.documentElement.setAttribute('data-theme', stored);
+					}
+				} catch (_) {}
+			})();
+		</script>
+	</head>
+	<body>
+		<div class="bg-dots" aria-hidden="true"></div>
+		<canvas class="bg-lines" aria-hidden="true"></canvas>
+		<slot />
+		<script>
+			const reveals = document.querySelectorAll('.reveal');
+			if (reveals.length && 'IntersectionObserver' in window) {
+				const observer = new IntersectionObserver(
+					(entries) => {
+						for (const entry of entries) {
+							if (entry.isIntersecting) {
+								entry.target.classList.add('is-visible');
+								observer.unobserve(entry.target);
+							}
+						}
+					},
+					{ rootMargin: '0px 0px -8% 0px', threshold: 0.12 },
+				);
+				reveals.forEach((el) => observer.observe(el));
+			} else {
+				reveals.forEach((el) => el.classList.add('is-visible'));
+			}
+
+			const frames = Array.from(
+				document.querySelectorAll<HTMLElement>('.frame'),
+			);
+			const heroSection = document.querySelector<HTMLElement>('.hero.section');
+			const footerSection = document.querySelector<HTMLElement>('.footer.section');
+			const header = document.querySelector<HTMLElement>('.header');
+
+			function getDotGridPx() {
+				const probe = document.createElement('div');
+				probe.style.cssText =
+					'position:absolute;visibility:hidden;width:var(--dot-grid);height:var(--dot-grid)';
+				document.body.appendChild(probe);
+				const size = probe.getBoundingClientRect().width;
+				probe.remove();
+				return size || 18;
+			}
+
+			function snapFramesToGrid() {
+				const grid = getDotGridPx();
+
+				for (const frame of frames) {
+					frame.style.removeProperty('--snap-x');
+					frame.style.removeProperty('--snap-y');
+					frame.style.removeProperty('width');
+					frame.style.removeProperty('min-height');
+				}
+
+				void document.body.offsetHeight;
+
+				for (const frame of frames) {
+					const rect = frame.getBoundingClientRect();
+					const absLeft = rect.left + window.scrollX;
+					const absTop = rect.top + window.scrollY;
+					const snappedLeft = Math.round(absLeft / grid) * grid;
+					const snappedTop = Math.round(absTop / grid) * grid;
+					const snappedWidth = Math.max(grid, Math.round(rect.width / grid) * grid);
+					const snappedHeight = Math.max(
+						grid,
+						Math.ceil(rect.height / grid) * grid,
+					);
+
+					frame.style.setProperty('--snap-x', `${snappedLeft - absLeft}px`);
+					frame.style.setProperty('--snap-y', `${snappedTop - absTop}px`);
+					frame.style.width = `${snappedWidth}px`;
+					frame.style.minHeight = `${snappedHeight}px`;
+				}
+			}
+
+			function snapToGrid(value: number, grid: number) {
+				return Math.max(0, Math.round(value / grid) * grid);
+			}
+
+			function updateEdgePads() {
+				if (!heroSection || !footerSection) return;
+
+				const grid = getDotGridPx();
+				const viewportH = window.innerHeight;
+				const headerH = header?.getBoundingClientRect().height ?? 0;
+				const heroH = heroSection.getBoundingClientRect().height;
+				const footerH = footerSection.getBoundingClientRect().height;
+
+				const startPad = snapToGrid(
+					viewportH / 2 - headerH - heroH / 2,
+					grid,
+				);
+				const endPad = snapToGrid(viewportH / 2 - footerH / 2, grid);
+
+				document.documentElement.style.setProperty(
+					'--edge-pad-start',
+					`${startPad}px`,
+				);
+				document.documentElement.style.setProperty(
+					'--edge-pad-end',
+					`${endPad}px`,
+				);
+			}
+
+			function updateActiveFrame() {
+				if (!frames.length) return;
+
+				const viewportCenter = window.innerHeight / 2;
+				let closest: HTMLElement | null = null;
+				let closestDistance = Infinity;
+
+				for (const frame of frames) {
+					const rect = frame.getBoundingClientRect();
+					const inView = rect.bottom > 0 && rect.top < window.innerHeight;
+					if (!inView) continue;
+
+					const frameCenter = rect.top + rect.height / 2;
+					const distance = Math.abs(frameCenter - viewportCenter);
+					if (distance < closestDistance) {
+						closestDistance = distance;
+						closest = frame;
+					}
+				}
+
+				for (const frame of frames) {
+					frame.classList.toggle('is-active', frame === closest);
+				}
+			}
+
+			let rafId = 0;
+			function onScroll() {
+				cancelAnimationFrame(rafId);
+				rafId = requestAnimationFrame(updateActiveFrame);
+			}
+
+			function onResize() {
+				cancelAnimationFrame(rafId);
+				rafId = requestAnimationFrame(() => {
+					snapFramesToGrid();
+					updateEdgePads();
+					updateActiveFrame();
+				});
+			}
+
+			window.addEventListener('scroll', onScroll, { passive: true });
+			window.addEventListener('resize', onResize);
+			window.addEventListener('load', onResize);
+			document.fonts?.ready.then(onResize);
+			onResize();
+
+			if (heroSection && footerSection && 'ResizeObserver' in window) {
+				const edgePadObserver = new ResizeObserver(() => onResize());
+				edgePadObserver.observe(heroSection);
+				edgePadObserver.observe(footerSection);
+			}
+
+			/* Orthogonal grid-line walkers over the dot field */
+			const canvas = document.querySelector<HTMLCanvasElement>('.bg-lines');
+			const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+			type Dir = 0 | 1 | 2 | 3; // N E S W
+			type Segment = { x1: number; y1: number; x2: number; y2: number; life: number; maxLife: number };
+			type Walker = {
+				gx: number;
+				gy: number;
+				dir: Dir;
+				stepsLeft: number;
+				progress: number;
+				speed: number;
+				longPath: boolean;
+			};
+
+			const DIRS: ReadonlyArray<readonly [number, number]> = [
+				[0, -1],
+				[1, 0],
+				[0, 1],
+				[-1, 0],
+			];
+
+			if (canvas && !reduceMotion.matches) {
+				const ctx = canvas.getContext('2d');
+				if (ctx) {
+					let grid = getDotGridPx();
+					let cols = 0;
+					let rows = 0;
+					let dpr = 1;
+					let walkers: Walker[] = [];
+					let trails: Segment[] = [];
+					let lineRaf = 0;
+					let lastTs = 0;
+					let spawnTimer = 0;
+
+					function lineColor() {
+						const probe = document.createElement('div');
+						probe.style.cssText =
+							'position:absolute;visibility:hidden;color:var(--color-dot)';
+						document.body.appendChild(probe);
+						const color = getComputedStyle(probe).color;
+						probe.remove();
+						return color || 'rgba(40, 40, 40, 0.2)';
+					}
+
+					function resizeCanvas() {
+						grid = getDotGridPx();
+						dpr = Math.min(window.devicePixelRatio || 1, 2);
+						const w = document.documentElement.scrollWidth;
+						const h = Math.max(
+							document.documentElement.scrollHeight,
+							document.body.scrollHeight,
+						);
+						canvas!.width = Math.floor(w * dpr);
+						canvas!.height = Math.floor(h * dpr);
+						canvas!.style.width = `${w}px`;
+						canvas!.style.height = `${h}px`;
+						ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+						cols = Math.max(2, Math.floor(w / grid));
+						rows = Math.max(2, Math.floor(h / grid));
+					}
+
+					function randomDir(exclude?: Dir): Dir {
+						let d = Math.floor(Math.random() * 4) as Dir;
+						if (exclude !== undefined && d === exclude) {
+							d = ((d + 1 + Math.floor(Math.random() * 3)) % 4) as Dir;
+						}
+						return d;
+					}
+
+					function spawnWalker() {
+						const longPath = Math.random() < 0.35;
+						const steps = longPath
+							? 16 + Math.floor(Math.random() * 24)
+							: 6 + Math.floor(Math.random() * 10);
+						walkers.push({
+							gx: Math.floor(Math.random() * cols),
+							gy: Math.floor(Math.random() * rows),
+							dir: randomDir(),
+							stepsLeft: steps,
+							progress: 0,
+							speed: longPath ? 0.65 + Math.random() * 0.4 : 0.45 + Math.random() * 0.35,
+							longPath,
+						});
+					}
+
+					function stepWalker(w: Walker, dt: number) {
+						w.progress += w.speed * dt;
+						while (w.progress >= 1 && w.stepsLeft > 0) {
+							w.progress -= 1;
+							const [dx, dy] = DIRS[w.dir];
+							const nx = w.gx + dx;
+							const ny = w.gy + dy;
+
+							const x1 = w.gx * grid;
+							const y1 = w.gy * grid;
+							const x2 = nx * grid;
+							const y2 = ny * grid;
+							const maxLife = w.longPath ? 4.2 : 2.6;
+							trails.push({ x1, y1, x2, y2, life: maxLife, maxLife });
+
+							w.gx = nx;
+							w.gy = ny;
+							w.stepsLeft -= 1;
+
+							const outOfBounds =
+								w.gx < 0 || w.gy < 0 || w.gx >= cols || w.gy >= rows;
+							if (outOfBounds || w.stepsLeft <= 0) {
+								w.stepsLeft = 0;
+								break;
+							}
+
+							if (Math.random() < 0.22) {
+								const reverse = ((w.dir + 2) % 4) as Dir;
+								w.dir = randomDir(reverse);
+							}
+						}
+					}
+
+					function draw(ts: number) {
+						const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0.016;
+						lastTs = ts;
+
+						spawnTimer += dt;
+						const targetWalkers = Math.max(10, Math.min(18, Math.floor((cols * rows) / 450)));
+						if (spawnTimer > 0.35 && walkers.length < targetWalkers) {
+							spawnTimer = 0;
+							spawnWalker();
+						}
+
+						for (const w of walkers) stepWalker(w, dt);
+						walkers = walkers.filter((w) => w.stepsLeft > 0);
+
+						for (const t of trails) t.life -= dt;
+						trails = trails.filter((t) => t.life > 0);
+
+						ctx!.clearRect(0, 0, canvas!.width / dpr, canvas!.height / dpr);
+						ctx!.lineWidth = 1;
+						ctx!.lineCap = 'square';
+						const color = lineColor();
+
+						for (const t of trails) {
+							const alpha = Math.max(0, t.life / t.maxLife);
+							ctx!.globalAlpha = alpha * 0.85;
+							ctx!.strokeStyle = color;
+							ctx!.beginPath();
+							ctx!.moveTo(t.x1, t.y1);
+							ctx!.lineTo(t.x2, t.y2);
+							ctx!.stroke();
+						}
+
+						// In-progress head segments
+						for (const w of walkers) {
+							if (w.progress <= 0) continue;
+							const [dx, dy] = DIRS[w.dir];
+							const x1 = w.gx * grid;
+							const y1 = w.gy * grid;
+							const x2 = x1 + dx * grid * w.progress;
+							const y2 = y1 + dy * grid * w.progress;
+							ctx!.globalAlpha = 0.7;
+							ctx!.strokeStyle = color;
+							ctx!.beginPath();
+							ctx!.moveTo(x1, y1);
+							ctx!.lineTo(x2, y2);
+							ctx!.stroke();
+						}
+
+						ctx!.globalAlpha = 1;
+						lineRaf = requestAnimationFrame(draw);
+					}
+
+					function startLines() {
+						cancelAnimationFrame(lineRaf);
+						resizeCanvas();
+						walkers = [];
+						trails = [];
+						spawnTimer = 1;
+						for (let i = 0; i < 12; i++) spawnWalker();
+						lastTs = 0;
+						lineRaf = requestAnimationFrame(draw);
+					}
+
+					function stopLines() {
+						cancelAnimationFrame(lineRaf);
+						ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
+						walkers = [];
+						trails = [];
+					}
+
+					startLines();
+
+					const ro = new ResizeObserver(() => {
+						resizeCanvas();
+					});
+					ro.observe(document.body);
+
+					reduceMotion.addEventListener('change', (e) => {
+						if (e.matches) stopLines();
+						else startLines();
+					});
+				}
+			}
+		</script>
+	</body>
+</html>

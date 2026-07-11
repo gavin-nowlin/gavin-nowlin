@@ -1,0 +1,134 @@
+---
+import type { Project } from '../data/projects';
+
+interface Props {
+	project: Project;
+}
+
+const { project } = Astro.props;
+const hostname = new URL(project.url).hostname.replace(/^www\./, '');
+---
+
+<a
+	class="project-card"
+	href={project.url}
+	target="_blank"
+	rel="noopener noreferrer"
+>
+	<div class="project-card__aside">
+		<span class="project-card__tag">{project.tag}</span>
+		<span class="project-card__arrow" aria-hidden="true">↗</span>
+	</div>
+	<div class="project-card__body">
+		<h3 class="project-card__name">{project.name}</h3>
+		<p class="project-card__description">{project.description}</p>
+		<span class="project-card__url">{hostname}</span>
+	</div>
+</a>
+
+<style>
+	.project-card {
+		display: flex;
+		flex-direction: row;
+		align-items: flex-start;
+		gap: var(--space-4);
+		min-height: 100%;
+		height: 100%;
+		padding: var(--space-4);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background-color: var(--color-bg-elevated);
+		color: inherit;
+		text-decoration: none;
+		transition:
+			transform var(--duration) var(--ease-out),
+			border-color var(--duration) var(--ease-out),
+			background-color var(--duration) var(--ease-out);
+	}
+
+	.project-card:hover {
+		color: inherit;
+		border-color: var(--color-accent);
+		transform: translateY(-2px);
+	}
+
+	.project-card__aside {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: space-between;
+		flex-shrink: 0;
+		gap: var(--space-3);
+		min-height: 100%;
+		width: calc(var(--dot-grid) * 5);
+	}
+
+	.project-card__tag {
+		font-size: var(--text-sm);
+		font-weight: 500;
+		line-height: 1.3;
+		color: var(--color-accent);
+	}
+
+	.project-card__arrow {
+		font-size: var(--text-base);
+		color: var(--color-text-muted);
+		transition:
+			color var(--duration) var(--ease-out),
+			transform var(--duration) var(--ease-out);
+	}
+
+	.project-card:hover .project-card__arrow {
+		color: var(--color-accent);
+		transform: translate(1px, -1px);
+	}
+
+	.project-card__body {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: var(--dot-grid);
+		min-width: 0;
+	}
+
+	.project-card__name {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		line-height: 1.2;
+	}
+
+	.project-card__description {
+		flex: 1;
+		font-size: var(--text-sm);
+		line-height: 1.55;
+		color: var(--color-text-muted);
+	}
+
+	.project-card__url {
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		color: var(--color-text);
+	}
+
+	@media (min-width: 640px) {
+		.project-card {
+			flex-direction: column;
+			gap: var(--dot-grid);
+			padding: var(--space-5);
+		}
+
+		.project-card__aside {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+			width: auto;
+			min-height: auto;
+		}
+
+		.project-card__name {
+			font-size: var(--text-xl);
+		}
+	}
+</style>

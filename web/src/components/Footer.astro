@@ -1,0 +1,108 @@
+---
+import { site } from '../data/site';
+---
+
+<footer id="contact" class="footer section">
+	<div class="container frame">
+		<span class="frame__mark frame__mark--tl" aria-hidden="true"></span>
+		<span class="frame__mark frame__mark--br" aria-hidden="true"></span>
+		<div class="reveal">
+			<span class="section-label">Contact</span>
+			<h2 class="section-title">Say hello</h2>
+			<p class="footer__copy">
+				Email me at{' '}
+				<a
+					class="footer__link"
+					href={`mailto:${site.email}`}
+					data-copy-email
+					data-email={site.email}
+				>
+					{site.email}
+				</a>
+			</p>
+			<p class="footer__hint" data-copy-status aria-live="polite"></p>
+			<p class="footer__copy">
+				Find me on{' '}
+				<a
+					class="footer__link"
+					href={site.github}
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					GitHub
+				</a>
+			</p>
+			<p class="footer__credit">
+				© {new Date().getFullYear()}{' '}{site.name}
+			</p>
+		</div>
+	</div>
+</footer>
+
+<script>
+	const link = document.querySelector<HTMLAnchorElement>('[data-copy-email]');
+	const status = document.querySelector<HTMLElement>('[data-copy-status]');
+
+	link?.addEventListener('click', async () => {
+		const email = link.dataset.email;
+		if (!email) return;
+
+		try {
+			await navigator.clipboard.writeText(email);
+			if (status) status.textContent = 'Copied email';
+		} catch {
+			if (status) status.textContent = email;
+		}
+
+		window.setTimeout(() => {
+			if (status) status.textContent = '';
+		}, 2000);
+	});
+</script>
+
+<style>
+	.footer__copy {
+		font-size: var(--text-lg);
+		line-height: var(--space-5);
+		color: var(--color-text-muted);
+		margin-bottom: 0;
+	}
+
+	.footer__link {
+		display: inline-flex;
+		align-items: center;
+		min-height: calc(var(--dot-grid) * 2);
+		padding-inline: var(--space-2);
+		margin-inline: calc(var(--space-2) * -1);
+		border-radius: var(--radius-sm);
+		font-weight: 600;
+		color: var(--color-accent);
+		text-decoration: none;
+		transition: background-color var(--duration) var(--ease-out);
+	}
+
+	.footer__link:hover {
+		color: var(--color-accent);
+		background-color: var(--color-accent-soft);
+	}
+
+	.footer__hint {
+		min-height: 0;
+		font-size: var(--text-sm);
+		line-height: var(--dot-grid);
+		color: var(--color-text-muted);
+		margin: 0;
+	}
+
+	.footer__hint:not(:empty) {
+		min-height: var(--dot-grid);
+		margin-block: var(--space-1);
+	}
+
+	.footer__credit {
+		margin-top: var(--space-5);
+		font-size: var(--text-sm);
+		line-height: var(--dot-grid);
+		color: var(--color-text-muted);
+	}
+</style>

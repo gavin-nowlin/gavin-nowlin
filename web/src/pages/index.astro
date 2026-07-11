@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import About from '../components/About.astro';
+import Projects from '../components/Projects.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<BaseLayout>
+	<Header />
+	<div class="edge-pad edge-pad--start" aria-hidden="true"></div>
+	<div class="page-flow">
+		<Hero />
+		<About />
+		<Projects />
+		<Footer />
+	</div>
+	<div class="edge-pad edge-pad--end" aria-hidden="true"></div>
+</BaseLayout>

@@ -1,0 +1,80 @@
+---
+import { site } from '../data/site';
+---
+
+<section id="about" class="section about" aria-labelledby="about-title">
+	<div class="container frame">
+		<span class="frame__mark frame__mark--tl" aria-hidden="true"></span>
+		<span class="frame__mark frame__mark--br" aria-hidden="true"></span>
+		<div class="reveal">
+			<span class="section-label">About</span>
+			<h2 id="about-title" class="section-title">A little background</h2>
+			<ul class="about__list">
+				<li>
+					<span class="about__key">Role</span>
+					<span class="about__value">
+						{site.role} at{' '}
+						<a href={site.company.url} target="_blank" rel="noopener noreferrer"
+							>{site.company.name}</a
+						>
+					</span>
+				</li>
+				<li>
+					<span class="about__key">Education</span>
+					<span class="about__value">{site.education}</span>
+				</li>
+				<li>
+					<span class="about__key">Location</span>
+					<span class="about__value">{site.location}</span>
+				</li>
+			</ul>
+		</div>
+	</div>
+</section>
+
+<style>
+	.about__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-5);
+	}
+
+	.about__list li {
+		display: grid;
+		gap: var(--dot-grid);
+		padding-bottom: var(--space-5);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.about__list li:last-child {
+		padding-bottom: 0;
+		border-bottom: none;
+	}
+
+	.about__key {
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		letter-spacing: 0.04em;
+		line-height: var(--dot-grid);
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+
+	.about__value {
+		font-size: var(--text-lg);
+		font-weight: 500;
+		letter-spacing: -0.01em;
+		line-height: var(--space-5);
+	}
+
+	@media (min-width: 640px) {
+		.about__list li {
+			grid-template-columns: 9rem 1fr;
+			align-items: baseline;
+			gap: var(--space-5);
+		}
+	}
+</style>
