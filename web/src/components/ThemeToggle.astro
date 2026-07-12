@@ -29,9 +29,30 @@
 			: 'light';
 	}
 
+	function updateFavicons(theme: 'light' | 'dark') {
+		const base = `/favicon/${theme}`;
+		const icons: Record<string, string> = {
+			'32': `${base}/favicon-32x32.png`,
+			'16': `${base}/favicon-16x16.png`,
+			ico: `${base}/favicon.ico`,
+			apple: `${base}/apple-touch-icon.png`,
+			manifest: `${base}/site.webmanifest`,
+		};
+
+		document.querySelectorAll<HTMLLinkElement>('[data-favicon]').forEach((el) => {
+			const key = el.getAttribute('data-favicon');
+			if (!key || !icons[key]) return;
+			// Replacing the node avoids sticky favicon caching in some browsers.
+			const next = el.cloneNode(true) as HTMLLinkElement;
+			next.href = icons[key];
+			el.replaceWith(next);
+		});
+	}
+
 	function setTheme(theme: 'light' | 'dark') {
 		document.documentElement.setAttribute('data-theme', theme);
 		localStorage.setItem('theme', theme);
+		updateFavicons(theme);
 	}
 
 	function toggleTheme() {

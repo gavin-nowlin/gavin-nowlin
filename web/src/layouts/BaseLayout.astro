@@ -28,8 +28,32 @@ const canonical = new URL(Astro.url.pathname, site.url).href;
 		<meta name="twitter:card" content="summary" />
 		<meta name="twitter:title" content={title} />
 		<meta name="twitter:description" content={description} />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
+		<link
+			rel="icon"
+			type="image/png"
+			sizes="32x32"
+			href="/favicon/light/favicon-32x32.png"
+			data-favicon="32"
+		/>
+		<link
+			rel="icon"
+			type="image/png"
+			sizes="16x16"
+			href="/favicon/light/favicon-16x16.png"
+			data-favicon="16"
+		/>
+		<link rel="shortcut icon" href="/favicon/light/favicon.ico" data-favicon="ico" />
+		<link
+			rel="apple-touch-icon"
+			sizes="180x180"
+			href="/favicon/light/apple-touch-icon.png"
+			data-favicon="apple"
+		/>
+		<link
+			rel="manifest"
+			href="/favicon/light/site.webmanifest"
+			data-favicon="manifest"
+		/>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -40,9 +64,26 @@ const canonical = new URL(Astro.url.pathname, site.url).href;
 			(function () {
 				try {
 					var stored = localStorage.getItem('theme');
-					if (stored === 'light' || stored === 'dark') {
-						document.documentElement.setAttribute('data-theme', stored);
-					}
+					var theme =
+						stored === 'light' || stored === 'dark'
+							? stored
+							: window.matchMedia('(prefers-color-scheme: dark)').matches
+								? 'dark'
+								: 'light';
+					document.documentElement.setAttribute('data-theme', theme);
+
+					var base = '/favicon/' + theme;
+					var icons = {
+						'32': base + '/favicon-32x32.png',
+						'16': base + '/favicon-16x16.png',
+						ico: base + '/favicon.ico',
+						apple: base + '/apple-touch-icon.png',
+						manifest: base + '/site.webmanifest',
+					};
+					document.querySelectorAll('[data-favicon]').forEach(function (el) {
+						var key = el.getAttribute('data-favicon');
+						if (key && icons[key]) el.setAttribute('href', icons[key]);
+					});
 				} catch (_) {}
 			})();
 		</script>

@@ -364,7 +364,7 @@ p {
 .section-title {
 	font-size: var(--text-xl);
 	font-weight: 600;
-	letter-spacing: -0.02em;
+	letter-spacing: -0.01em;
 	line-height: var(--space-5);
 	margin-bottom: var(--space-6);
 }
