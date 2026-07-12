@@ -29,8 +29,9 @@ import ProjectCard from './ProjectCard.astro';
 		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: var(--space-4);
+		gap: var(--space-5);
 		align-items: stretch;
+		margin-top: var(--space-2);
 	}
 
 	.projects__grid > li {
@@ -47,7 +48,14 @@ import ProjectCard from './ProjectCard.astro';
 	@media (min-width: 640px) {
 		.projects__grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: var(--space-5);
+			gap: var(--space-6);
+			margin-top: var(--space-3);
+		}
+	}
+
+	@media (min-width: 960px) {
+		.projects__grid {
+			gap: var(--space-7);
 		}
 	}
 </style>

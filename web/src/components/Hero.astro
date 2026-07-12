@@ -16,14 +16,30 @@ import { site } from '../data/site';
 
 <style>
 	.hero__eyebrow {
-		margin-bottom: var(--dot-grid);
+		margin-bottom: var(--space-2);
 		font-family: var(--font-mono);
 		font-size: var(--text-sm);
 		font-weight: 500;
 		letter-spacing: 0.06em;
 		line-height: var(--dot-grid);
 		text-transform: uppercase;
+		color: var(--color-text-muted);
+		filter: drop-shadow(0 0 0 transparent);
+		transition:
+			color 0.5s var(--ease-out),
+			filter 0.5s var(--ease-out);
+	}
+
+	.frame.is-active .hero__eyebrow {
 		color: var(--color-accent);
+		filter: drop-shadow(0 0 0.35rem var(--color-glow))
+			drop-shadow(0 0 0.75rem color-mix(in oklch, var(--color-accent) 45%, transparent));
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.hero__eyebrow {
+			transition: none;
+		}
 	}
 
 	.hero__name {
@@ -31,7 +47,7 @@ import { site } from '../data/site';
 		font-weight: 700;
 		letter-spacing: -0.04em;
 		line-height: 1.125;
-		margin-bottom: var(--space-5);
+		margin-bottom: var(--space-6);
 	}
 
 	.hero__bio {
