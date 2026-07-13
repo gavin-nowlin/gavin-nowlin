@@ -17,6 +17,8 @@ type FrameMask = {
 	target: number;
 };
 
+type CornerCell = { gx: number; gy: number; ch: string };
+
 const WAVES: readonly Wave[] = [
 	{ kx: 0.13, ky: 0.065, speed: 0.55, phase: 0.2 },
 	{ kx: 0.055, ky: 0.15, speed: -0.42, phase: 1.4 },
@@ -28,8 +30,8 @@ const WAVES: readonly Wave[] = [
 /** Light → heavy glyph density by wave intensity */
 const CHAR_RAMP = ['·', '.', ':', ';', '+', '*', '#', '%', '@'] as const;
 
-const ALPHA_MIN = 0.05;
-const ALPHA_MAX = 0.3;
+const ALPHA_MIN = 0.14;
+const ALPHA_MAX = 0.55;
 const BORDER_GRIDS = 5;
 /** How far wave peaks/valleys push the focus border (in grid cells) */
 const EDGE_WAVE_GRIDS = 2.25;
@@ -39,6 +41,11 @@ const LOW_INTENSITY_CUTOFF = 0.34;
 const CLEARANCE_FADE_SEC = 0.38;
 /** First half of eased progress: damp wave intensity to minimum; second half: fade opacity */
 const SUPPRESS_END = 0.5;
+/** Extra cells drawn past the viewport edge */
+const OVERSCAN = 1;
+/** Unfocused / focused opacity for frame corner ASCII */
+const CORNER_ALPHA_MIN = 0.4;
+const CORNER_ALPHA_MAX = 0.95;
 
 function clamp01(value: number) {
 	return Math.min(1, Math.max(0, value));
@@ -220,6 +227,44 @@ function focusEffectAt(
 	return { suppress, opacityFade, proximity, focusInfluence };
 }
 
+/**
+ * + at the corner, then `-` / `|` arms.
+ * arm = number of line cells extending from the plus (scales with --corner-arm).
+ */
+function cornerCellsForMask(
+	mask: FrameMask,
+	grid: number,
+	arm: number,
+): CornerCell[] {
+	const tlGx = Math.round(mask.left / grid);
+	const tlGy = Math.round(mask.top / grid);
+	const brGx = Math.round(mask.right / grid);
+	const brGy = Math.round(mask.bottom / grid);
+	const cells: CornerCell[] = [
+		{ gx: tlGx, gy: tlGy, ch: '+' },
+		{ gx: brGx, gy: brGy, ch: '+' },
+	];
+
+	for (let i = 1; i <= arm; i++) {
+		cells.push({ gx: tlGx + i, gy: tlGy, ch: '─' });
+		cells.push({ gx: tlGx, gy: tlGy + i, ch: '〡' });
+		cells.push({ gx: brGx - i, gy: brGy, ch: '─' });
+		cells.push({ gx: brGx, gy: brGy - i, ch: '〡' });
+	}
+
+	return cells;
+}
+
+function buildCornerKeySet(masks: FrameMask[], grid: number, arm: number) {
+	const keys = new Set<string>();
+	for (const mask of masks) {
+		for (const cell of cornerCellsForMask(mask, grid, arm)) {
+			keys.add(`${cell.gx},${cell.gy}`);
+		}
+	}
+	return keys;
+}
+
 export function initBgDotWaves(
 	canvas: HTMLCanvasElement,
 	getDotGridPx: () => number,
@@ -239,9 +284,12 @@ export function initBgDotWaves(
 	}));
 
 	let grid = getDotGridPx();
-	let cols = 0;
-	let rows = 0;
+	let docW = 0;
+	let docH = 0;
+	let viewW = 0;
+	let viewH = 0;
 	let dpr = 1;
+	let cornerArm = 2;
 	let rafId = 0;
 	let startTs = 0;
 	let lastTs = 0;
@@ -249,16 +297,32 @@ export function initBgDotWaves(
 	let base = readCssColor('--color-dot', 'rgba(40, 40, 40, 0.2)');
 	let accent = readCssColor('--color-accent', 'oklch(0.6171 0.1825 145.59)');
 	let white = readCssColor('--color-dot-wave-white', 'oklch(1 0 0)');
+	let border = readCssColor('--color-border', 'rgba(180, 180, 180, 0.8)');
+	let glow = readCssColor('--color-glow', 'rgba(80, 200, 100, 0.2)');
 	let alphaMin = ALPHA_MIN;
 	let alphaMax = ALPHA_MAX;
+	let running = false;
+	let cornerKeys = new Set<string>();
+	/** Previous viewport origin in document space (for clearing stale ink while scrolling) */
+	let prevScrollX = 0;
+	let prevScrollY = 0;
+	let hasPrevViewport = false;
 
 	function refreshColors() {
 		base = readCssColor('--color-dot', 'rgba(40, 40, 40, 0.2)');
 		accent = readCssColor('--color-accent', 'oklch(0.6171 0.1825 145.59)');
 		white = readCssColor('--color-dot-wave-white', 'oklch(1 0 0)');
+		border = readCssColor('--color-border', 'rgba(180, 180, 180, 0.8)');
+		glow = readCssColor('--color-glow', 'rgba(80, 200, 100, 0.2)');
 		monoFont = readMonoFont();
 		alphaMin = readCssNumber('--ascii-alpha-min', ALPHA_MIN);
 		alphaMax = readCssNumber('--ascii-alpha-max', ALPHA_MAX);
+		cornerArm = Math.max(1, Math.round(readCssNumber('--corner-arm', 2)));
+	}
+
+	function waveT(now = performance.now()) {
+		if (!startTs) return 0;
+		return (now - startTs) / 1000;
 	}
 
 	function syncMasks(dt: number) {
@@ -287,41 +351,107 @@ export function initBgDotWaves(
 				mask.progress = Math.max(mask.target, mask.progress - rate);
 			}
 		}
+
+		cornerKeys = buildCornerKeySet(masks, grid, cornerArm);
 	}
 
 	function resizeCanvas() {
 		grid = getDotGridPx();
-		dpr = Math.min(window.devicePixelRatio || 1, 2);
-		const w = document.documentElement.scrollWidth;
-		const h = Math.max(
+		cornerArm = Math.max(1, Math.round(readCssNumber('--corner-arm', 2)));
+		// Cap DPR — document-sized backing store; viewport-only draws keep CPU down
+		dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+		docW = document.documentElement.scrollWidth;
+		docH = Math.max(
 			document.documentElement.scrollHeight,
 			document.body.scrollHeight,
 		);
-		canvas.width = Math.floor(w * dpr);
-		canvas.height = Math.floor(h * dpr);
-		canvas.style.width = `${w}px`;
-		canvas.style.height = `${h}px`;
+		viewW = window.innerWidth;
+		viewH = window.innerHeight;
+		canvas.width = Math.floor(docW * dpr);
+		canvas.height = Math.floor(docH * dpr);
+		canvas.style.width = `${docW}px`;
+		canvas.style.height = `${docH}px`;
 		ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-		cols = Math.max(2, Math.ceil(w / grid) + 1);
-		rows = Math.max(2, Math.ceil(h / grid) + 1);
+		hasPrevViewport = false;
 	}
 
-	function drawFrame(t: number, animate: boolean) {
-		ctx!.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-		ctx!.font = `${grid * 0.85}px ${monoFont}`;
+	function clearViewportRegion(x: number, y: number) {
+		const pad = grid * (OVERSCAN + 2);
+		ctx!.clearRect(x - pad, y - pad, viewW + pad * 2, viewH + pad * 2);
+	}
+
+	function drawCorners(scrollX: number, scrollY: number) {
+		ctx!.font = `${grid * 0.95}px ${monoFont}`;
 		ctx!.textAlign = 'center';
 		ctx!.textBaseline = 'middle';
 
-		const borderPx = grid * BORDER_GRIDS;
+		const minX = scrollX - grid;
+		const minY = scrollY - grid;
+		const maxX = scrollX + viewW + grid;
+		const maxY = scrollY + viewH + grid;
 
-		for (let gy = 0; gy < rows; gy++) {
-			for (let gx = 0; gx < cols; gx++) {
-				const x = gx * grid;
-				const y = gy * grid;
+		for (const mask of masks) {
+			const eased = easeInOut(mask.progress);
+			const color = mixRgba(border, accent, eased);
+			const alpha = CORNER_ALPHA_MIN + (CORNER_ALPHA_MAX - CORNER_ALPHA_MIN) * eased;
+			const cells = cornerCellsForMask(mask, grid, cornerArm);
+
+			ctx!.shadowColor = rgbaString({
+				...glow,
+				a: glow.a * eased,
+			});
+			ctx!.shadowBlur = eased > 0.01 ? 10 * eased : 0;
+			ctx!.fillStyle = rgbaString({ ...color, a: alpha });
+
+			for (const cell of cells) {
+				const docX = cell.gx * grid;
+				const docY = cell.gy * grid;
+				if (docX < minX || docY < minY || docX > maxX || docY > maxY) continue;
+				ctx!.fillText(cell.ch, docX, docY);
+			}
+		}
+
+		ctx!.shadowBlur = 0;
+		ctx!.shadowColor = 'transparent';
+	}
+
+	function drawFrame(t: number, animate: boolean) {
+		const scrollX = window.scrollX;
+		const scrollY = window.scrollY;
+
+		// Canvas lives in document space and scrolls with content (compositor-synced).
+		// Only clear/paint the visible region (+ previous region to erase stale waves).
+		if (hasPrevViewport) {
+			clearViewportRegion(prevScrollX, prevScrollY);
+		}
+		clearViewportRegion(scrollX, scrollY);
+		prevScrollX = scrollX;
+		prevScrollY = scrollY;
+		hasPrevViewport = true;
+
+		ctx!.font = `${grid * 0.85}px ${monoFont}`;
+		ctx!.textAlign = 'center';
+		ctx!.textBaseline = 'middle';
+		ctx!.shadowBlur = 0;
+
+		const borderPx = grid * BORDER_GRIDS;
+		const startGx = Math.floor(scrollX / grid) - OVERSCAN;
+		const startGy = Math.floor(scrollY / grid) - OVERSCAN;
+		const endGx = Math.ceil((scrollX + viewW) / grid) + OVERSCAN;
+		const endGy = Math.ceil((scrollY + viewH) / grid) + OVERSCAN;
+
+		let lastFill = '';
+
+		for (let gy = startGy; gy <= endGy; gy++) {
+			for (let gx = startGx; gx <= endGx; gx++) {
+				if (cornerKeys.has(`${gx},${gy}`)) continue;
+
+				const docX = gx * grid;
+				const docY = gy * grid;
 				const rawIntensity = animate ? sampleIntensity(gx, gy, t) : 0;
 				const { suppress, opacityFade, focusInfluence } = focusEffectAt(
-					x,
-					y,
+					docX,
+					docY,
 					rawIntensity,
 					masks,
 					borderPx,
@@ -334,7 +464,7 @@ export function initBgDotWaves(
 					if (rawIntensity < cutoff) continue;
 				}
 
-				let intensity = rawIntensity * (1 - suppress);
+				const intensity = rawIntensity * (1 - suppress);
 
 				const color = animate
 					? waveColor(base, accent, white, intensity)
@@ -345,50 +475,83 @@ export function initBgDotWaves(
 
 				if (alpha <= 0.001) continue;
 
-				ctx!.fillStyle = rgbaString({ ...color, a: alpha });
-				ctx!.fillText(charForIntensity(intensity), x, y);
+				const fill = rgbaString({ ...color, a: alpha });
+				if (fill !== lastFill) {
+					ctx!.fillStyle = fill;
+					lastFill = fill;
+				}
+				ctx!.fillText(charForIntensity(intensity), docX, docY);
 			}
 		}
+
+		drawCorners(scrollX, scrollY);
 	}
 
 	function tick(ts: number) {
-		if (!startTs) startTs = ts;
-		const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0.016;
-		lastTs = ts;
-		syncMasks(dt);
-		drawFrame((ts - startTs) / 1000, true);
 		rafId = requestAnimationFrame(tick);
+		if (!startTs) startTs = ts;
+		const drawDt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0.016;
+		lastTs = ts;
+		syncMasks(drawDt);
+		drawFrame(waveT(ts), true);
+	}
+
+	function stopLoop() {
+		cancelAnimationFrame(rafId);
+		rafId = 0;
+		running = false;
+	}
+
+	function startLoop() {
+		if (running || reduceMotion.matches || document.hidden) return;
+		running = true;
+		startTs = 0;
+		lastTs = 0;
+		rafId = requestAnimationFrame(tick);
+	}
+
+	function paintStatic() {
+		syncMasks(CLEARANCE_FADE_SEC);
+		drawFrame(0, false);
 	}
 
 	function start() {
-		cancelAnimationFrame(rafId);
+		stopLoop();
 		resizeCanvas();
 		refreshColors();
-		startTs = 0;
-		lastTs = 0;
-		syncMasks(CLEARANCE_FADE_SEC);
 
 		if (reduceMotion.matches) {
-			drawFrame(0, false);
+			paintStatic();
 			return;
 		}
 
-		rafId = requestAnimationFrame(tick);
+		syncMasks(CLEARANCE_FADE_SEC);
+		startLoop();
 	}
 
 	function stop() {
-		cancelAnimationFrame(rafId);
-		rafId = 0;
-		ctx!.clearRect(0, 0, canvas.width, canvas.height);
+		stopLoop();
+		ctx!.clearRect(0, 0, docW, docH);
 	}
 
 	start();
 
-	const ro = new ResizeObserver(() => {
+	const onResize = () => {
 		resizeCanvas();
-		syncMasks(CLEARANCE_FADE_SEC);
 		if (reduceMotion.matches) {
-			drawFrame(0, false);
+			paintStatic();
+		}
+	};
+	window.addEventListener('resize', onResize);
+
+	const ro = new ResizeObserver(() => {
+		const nextW = document.documentElement.scrollWidth;
+		const nextH = Math.max(
+			document.documentElement.scrollHeight,
+			document.body.scrollHeight,
+		);
+		if (nextW !== docW || nextH !== docH) {
+			onResize();
 		}
 	});
 	ro.observe(document.body);
@@ -396,8 +559,7 @@ export function initBgDotWaves(
 	const themeObserver = new MutationObserver(() => {
 		refreshColors();
 		if (reduceMotion.matches) {
-			syncMasks(CLEARANCE_FADE_SEC);
-			drawFrame(0, false);
+			paintStatic();
 		}
 	});
 	themeObserver.observe(document.documentElement, {
@@ -408,8 +570,7 @@ export function initBgDotWaves(
 	const onSchemeChange = () => {
 		refreshColors();
 		if (reduceMotion.matches) {
-			syncMasks(CLEARANCE_FADE_SEC);
-			drawFrame(0, false);
+			paintStatic();
 		}
 	};
 	const schemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -417,25 +578,34 @@ export function initBgDotWaves(
 
 	const onMotionChange = (e: MediaQueryListEvent) => {
 		if (e.matches) {
-			cancelAnimationFrame(rafId);
-			rafId = 0;
+			stopLoop();
 			refreshColors();
-			syncMasks(CLEARANCE_FADE_SEC);
-			drawFrame(0, false);
+			paintStatic();
 		} else {
 			start();
 		}
 	};
 	reduceMotion.addEventListener('change', onMotionChange);
 
-	// Keep reduced-motion static frames in sync when focus changes via scroll
-	const onScrollOrResize = () => {
+	// Document-space canvas scrolls with content; reduced-motion still needs focus redraws
+	const onScroll = () => {
 		if (!reduceMotion.matches) return;
-		syncMasks(CLEARANCE_FADE_SEC);
-		drawFrame(0, false);
+		paintStatic();
 	};
-	window.addEventListener('scroll', onScrollOrResize, { passive: true });
-	window.addEventListener('resize', onScrollOrResize);
+	window.addEventListener('scroll', onScroll, { passive: true });
+
+	const onVisibility = () => {
+		if (document.hidden) {
+			stopLoop();
+			return;
+		}
+		if (reduceMotion.matches) {
+			paintStatic();
+			return;
+		}
+		startLoop();
+	};
+	document.addEventListener('visibilitychange', onVisibility);
 
 	return () => {
 		stop();
@@ -443,7 +613,8 @@ export function initBgDotWaves(
 		themeObserver.disconnect();
 		schemeQuery.removeEventListener('change', onSchemeChange);
 		reduceMotion.removeEventListener('change', onMotionChange);
-		window.removeEventListener('scroll', onScrollOrResize);
-		window.removeEventListener('resize', onScrollOrResize);
+		window.removeEventListener('resize', onResize);
+		window.removeEventListener('scroll', onScroll);
+		document.removeEventListener('visibilitychange', onVisibility);
 	};
 }
